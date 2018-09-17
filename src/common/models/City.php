@@ -9,6 +9,7 @@
 namespace cronfy\city\common\models;
 
 use cronfy\city\BaseModule;
+use cronfy\geoname\common\models\Geoname;
 use cronfy\library\common\models\ConcreteLibrary;
 use Yii;
 
@@ -29,4 +30,20 @@ class City extends ConcreteLibrary
         $module = Yii::$app->getModule('city');
         return $module->libraryRootPath;
     }
+
+    public function isCrimea() {
+        return @$this->data['crimea'];
+    }
+
+    /**
+     * @return Geoname
+     */
+    public function getGeoname()
+    {
+        /** @var \cronfy\geoname\BaseModule $geonameModule */
+        $geonameModule = Yii::$app->getModule('geoname');
+        $geonameId = $this->data['geonameId'];
+        return $geonameModule->getGeonameRepository()->getByGeonameId($geonameId);
+    }
+
 }

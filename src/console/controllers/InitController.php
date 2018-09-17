@@ -8,12 +8,12 @@
 
 namespace cronfy\city\console\controllers;
 
+use cronfy\city\common\models\City;
 use cronfy\city\console\Module;
 use cronfy\geoname\BaseModule;
 use cronfy\geoname\common\models\Geoname;
 use cronfy\library\common\misc\LibraryHelper;
 use cronfy\library\common\models\Library;
-use modules\city\common\models\City;
 use Yii;
 use yii\console\Controller;
 use yii\helpers\ArrayHelper;
