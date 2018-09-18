@@ -28,7 +28,7 @@ class CityRepository extends BaseObject
 
     /**
      * @param $name
-     * @return static[]
+     * @return City[]
      */
     public function findByName($name) {
         // е/ё - ищем по всем возможным вариантам
