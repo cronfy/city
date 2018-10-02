@@ -36,6 +36,7 @@ class BaseModule extends \yii\base\Module
     public function getCityRepository() {
         if (!$this->_cityRepository) {
             $this->_cityRepository = new CityRepository();
+            $this->_cityRepository->module = $this;
         }
 
         return $this->_cityRepository;

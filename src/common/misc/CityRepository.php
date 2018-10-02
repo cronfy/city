@@ -8,16 +8,20 @@
 
 namespace cronfy\city\common\misc;
 
+use cronfy\city\BaseModule;
 use cronfy\city\common\models\City;
 use yii\base\BaseObject;
 
 class CityRepository extends BaseObject
 {
+    /** @var BaseModule */
+    public $module;
 
     protected $_byId = [];
     public function getById($id) {
         if (!array_key_exists($id, $this->_byId)) {
-            $this->_byId[$id] = City::findOne($id);
+            $class = $this->module->cityModel;
+            $this->_byId[$id] = $class::findOne($id);
         }
 
         return $this->_byId[$id];
