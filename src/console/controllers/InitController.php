@@ -173,6 +173,11 @@ class InitController extends Controller
             $city->data['is_very_popular'] = in_array($ruName, ['Москва', 'Санкт-Петербург']);
             $city->data['is_default']      = $ruName == 'Санкт-Петербург';
 
+            $city->data['lat'] = $geonameDto->latitude;
+            $city->data['lng'] = $geonameDto->longitude;
+
+            $city->data['countryIso'] = $geonameDto->country_code;
+
             if ($ruName == 'Санкт-Петербург') {
                 $city->sid = 'spb';
             }
@@ -212,57 +217,5 @@ class InitController extends Controller
         }
 
         echo "\n";
-    }
-
-    public function actionMarkCrimea() {
-        echo "Marking Crimea cities...\n";
-        // отметить города Крыма
-
-        $sevastopolGeonameId = 694423;
-        $crimeaGeonameId = 703883;
-
-        /** @var Geoname[] $crimeaGeonames */
-        $crimeaGeonames = Geoname::find()->andWhere([
-            'and',
-            ['type' => 'city'],
-            ['like', 'data', "\"regionGeonameId\":$crimeaGeonameId"]
-        ])
-            ->all()
-        ;
-
-        $geonameIds = ArrayHelper::getColumn($crimeaGeonames, 'geonameId');
-        $geonameIds[] = $sevastopolGeonameId;
-
-        foreach ($geonameIds as $geonameId) {
-            /** @var City $city */
-            $city = City::find()->andWhere(
-                ['like', 'data', "\"geonameId\":$geonameId"]
-            )->one();
-
-            $cityGeoname = $city->getGeoname();
-
-            do {
-                if ($cityGeoname->geonameId === $sevastopolGeonameId) {
-                    break;
-                }
-
-                if ($cityGeoname->data['regionGeonameId'] === $crimeaGeonameId) {
-                    break;
-                }
-
-                // попался левый город
-                // это могло случиться, так как поиск по БД был по неточным параметрам
-                echo " --- {$city->name}";
-                continue 2;
-            } while (false);
-
-            $city->data['crimea'] = true;
-            $city->ensureSave();
-
-            echo "{$city->name}\n";
-        }
-
-        echo "Ok.\n";
-
     }
 }
