@@ -10,8 +10,10 @@ namespace cronfy\city\console\controllers;
 
 use cronfy\city\common\models\City;
 use cronfy\city\console\Module;
-use cronfy\geoname\BaseModule;
+use cronfy\geoname\common\misc\GeonameService;
 use cronfy\geoname\common\models\Geoname;
+use cronfy\geonameLink\common\misc\GeonameSelections;
+use cronfy\geonameLink\common\misc\Service;
 use cronfy\library\common\misc\LibraryHelper;
 use cronfy\library\common\models\Library;
 use Yii;
@@ -23,6 +25,8 @@ use yii\helpers\ArrayHelper;
  */
 class InitController extends Controller
 {
+    public $geonameSelections;
+
     public function actionHelp() {
         echo "Read my code";
 
@@ -94,50 +98,119 @@ class InitController extends Controller
         Library::deleteAll(['pid' => $library->id]);
     }
 
-    public function actionByGeonames()
-    {
-        /** @var BaseModule $geonameModule */
-        $geonameModule = Yii::$app->getModule('geoname');
+    /**
+     * @return Service
+     */
+    protected function getGeonameLinkService() {
+        return Yii::$app->getModule('geonameLink')->getService();
+    }
 
-        foreach (Geoname::find()->andWhere(['type' => 'city'])->all() as $geoname) {
-            /** @var Geoname $geoname */
-            if (!$existingCities = City::find()->andWhere(['name' => $geonameModule::yeYoOptions($geoname->name)])->all()) {
+    protected $_geonameSelections;
+
+    /**
+     * @return GeonameSelections
+     * @throws \yii\base\InvalidConfigException
+     */
+    protected function getGeonameSelections() {
+        if (!$this->_geonameSelections) {
+            /** @var GeonameSelections $geonameSelections */
+            $geonameSelections = Yii::createObject($this->geonameSelections);
+            $geonameSelections->geonamesService = $this->getGeonamesService();
+            $this->_geonameSelections = $geonameSelections;
+        }
+
+        return $this->_geonameSelections;
+    }
+
+    /**
+     * @return GeonameService
+     */
+    protected function getGeonamesService() {
+        return Yii::$app->getModule('geoname')->getGeonamesService();
+    }
+
+    public function actionByGeonames($update = false)
+    {
+        $update = $update === 'update';
+
+        $geonamesService = $this->getGeonamesService();
+        $geonameLinkService = $this->getGeonameLinkService();
+        $ruNames = $geonameLinkService->getDataFromFile('ru-names');
+        $selections = $this->getGeonameSelections();
+
+        foreach ($selections->local() as $geonameDto) {
+            if (!$existingCities = City::find()->andWhere(['like', 'data', 'geonameId":' . $geonameDto->geonameid])->all()) {
                 $city = null;
             } else {
-                $city = null;
-                foreach ($existingCities as $existingCity) {
-                    if ($existingCity['data']['geonameId'] == $geoname->geonameId) {
-                        $city = $existingCity;
-                        break;
-                    }
+                if (count($existingCities) > 1) {
+                    throw new \Exception("Too many cities with geonameid {$geonameDto->geonameid} found in city database");
                 }
+                $city = array_shift($existingCities);
             }
 
             if ($city !== null) {
+                if (!$update) {
+                    echo "=";
+                    continue;
+                }
+
                 echo ".";
             } else {
                 $city = new City();
+                $city->is_active = true;
+                $city->data['geonameId'] = $geonameDto->geonameid;
                 echo "+";
             }
 
-            $city->setAttributes([
-                'name' => $geoname->name,
-                'is_active' => true,
-            ]);
+            if (!$ruName = $ruNames[$geonameDto->geonameid]) {
+                D($geonameDto);
+                throw new \Exception("Selected geoname {$geonameDto->geonameid}, but ruName is not known.");
+            }
 
-            $city->data['is_popular']      = $geoname->data['population'] > 450000;
-            $city->data['is_very_popular'] = in_array($geoname->name, ['Москва', 'Санкт-Петербург']);
-            $city->data['is_default']      = $geoname->name == 'Санкт-Петербург';
+            $city->name = $ruName;
 
-            if ($geoname->name == 'Санкт-Петербург') {
+            $city->data['is_popular']      = $geonameDto->population > 450000;
+            $city->data['is_very_popular'] = in_array($ruName, ['Москва', 'Санкт-Петербург']);
+            $city->data['is_default']      = $ruName == 'Санкт-Петербург';
+
+            if ($ruName == 'Санкт-Петербург') {
                 $city->sid = 'spb';
             }
 
-            $city->data['geonameId'] = $geoname->geonameId;
-            $region = Geoname::findOne(['geonameId' => $geoname->data['regionGeonameId']]);
-            $city->data['regionName'] = $region->name;
+            $regionGeoname = $geonamesService->getRegionByGeoname($geonameDto);
+            $regionRuName = $this->getGeonamesService()->getOfficialNameByGeoname($regionGeoname, 'ru');
+            $city->data['regionName'] = $regionRuName ? $regionRuName->alternate_name : $regionGeoname->name;
+
+//            if (!$city->isNewRecord && $city->dirtyAttributes) {
+//                $old = [];
+//                $dirty = [];
+//                $oldA = $city->oldAttributes;
+//                foreach ($city->dirtyAttributes as $name => $value) {
+//                    $oldValue = @$oldA[$name];
+//                    if ($name === 'data') {
+//                        $newValue = (string) $value;
+//                        if ($oldValue === $newValue) {
+//                            continue;
+//                        }
+//
+//                        $dirty[$name] = $newValue;
+//                        $old[$name] = $oldValue;
+//                    } else {
+//                        $dirty[$name] = $value;
+//                        $old[$name] = $oldValue;
+//                    }
+//                }
+//                if ($dirty) {
+//                    E([
+//                        $old,
+//                        $dirty,
+//                    ]);
+//                }
+//            }
+
             $city->ensureSave();
         }
+
         echo "\n";
     }
 
